@@ -8,32 +8,20 @@ import EventModal from './EventModal';
 import AddEventModal from './AddEventModal';
 import FileDropOverlay from './FileDropOverlay';
 import { CalendarEvent, DroppedFile, EventType, normalizeEventType } from '../types';
-
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+import { authFetch, clearToken } from '../lib/apiClient';
 
 function parseDate(dateStr: string): Date {
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(y, m - 1, d);
 }
 
-async function apiSaveEvent(event: CalendarEvent): Promise<void> {
-  await fetch(`${API_URL}/api/events`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      id: event.id,
-      title: event.title,
-      date: event.date.toISOString().split('T')[0],
-      time: event.time,
-      type: event.type,
-      description: event.description,
-      sourceFile: event.sourceFile,
-    }),
-  });
-}
-
-async function apiDeleteEvent(id: string): Promise<void> {
-  await fetch(`${API_URL}/api/events/${id}`, { method: 'DELETE' });
+function handle401(res: Response, onLogout: () => void): boolean {
+  if (res.status === 401) {
+    clearToken();
+    onLogout();
+    return true;
+  }
+  return false;
 }
 
 interface RawEvent {
@@ -57,26 +45,47 @@ export default function CalendarApp({ onLogout }: Props) {
 
   // Load events from server on mount
   useEffect(() => {
-    fetch(`${API_URL}/api/events`)
-      .then(r => r.json())
-      .then(({ events: rows }) => {
+    authFetch('/api/events')
+      .then(async res => {
+        if (handle401(res, onLogout)) return;
+        const { events: rows } = await res.json();
         setEvents(
           rows.map((e: CalendarEvent & { date: string }) => ({
             ...e,
             date: parseDate(e.date),
           })),
         );
-        setEventsLoaded(true);
       })
-      .catch(err => {
-        console.error('Could not load events from server:', err);
-        setEventsLoaded(true);
-      });
-  }, []);
+      .catch(err => console.error('Failed to load events:', err))
+      .finally(() => setEventsLoaded(true));
+  }, [onLogout]);
 
   const handlePrevMonth = () => setCurrentDate(d => subMonths(d, 1));
   const handleNextMonth = () => setCurrentDate(d => addMonths(d, 1));
   const handleGoToToday = () => setCurrentDate(new Date());
+
+  const saveEventToServer = async (event: CalendarEvent) => {
+    const res = await authFetch('/api/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: event.id,
+        title: event.title,
+        date: event.date.toISOString().split('T')[0],
+        time: event.time,
+        type: event.type,
+        description: event.description,
+        sourceFile: event.sourceFile,
+      }),
+    });
+    if (handle401(res, onLogout)) throw new Error('Unauthorized');
+    if (!res.ok) throw new Error('Failed to save event');
+  };
+
+  const deleteEventFromServer = async (id: string) => {
+    const res = await authFetch(`/api/events/${id}`, { method: 'DELETE' });
+    if (handle401(res, onLogout)) throw new Error('Unauthorized');
+  };
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const pairs = acceptedFiles.map(file => ({
@@ -104,7 +113,9 @@ export default function CalendarApp({ onLogout }: Props) {
           const form = new FormData();
           form.append('file', file);
 
-          const res = await fetch(`${API_URL}/api/analyze`, { method: 'POST', body: form });
+          const res = await authFetch('/api/analyze', { method: 'POST', body: form });
+          if (handle401(res, onLogout)) return;
+
           if (!res.ok) {
             const body = await res.json().catch(() => ({ error: res.statusText }));
             throw new Error(body.error ?? res.statusText);
@@ -123,8 +134,7 @@ export default function CalendarApp({ onLogout }: Props) {
               sourceFile: entry.name,
             }));
 
-          // Persist each extracted event to the server
-          await Promise.all(extracted.map(apiSaveEvent));
+          await Promise.all(extracted.map(saveEventToServer));
 
           setDroppedFiles(prev =>
             prev.map(f =>
@@ -145,19 +155,19 @@ export default function CalendarApp({ onLogout }: Props) {
         }
       }),
     );
-  }, []);
+  }, [onLogout]);
 
   const handleDeleteEvent = async (id: string) => {
     setEvents(prev => prev.filter(e => e.id !== id));
     setSelectedEvent(null);
-    await apiDeleteEvent(id).catch(err => console.error('Delete failed:', err));
+    await deleteEventFromServer(id).catch(err => console.error('Delete failed:', err));
   };
 
   const handleSaveNewEvent = async (event: CalendarEvent) => {
     setEvents(prev => [...prev, event]);
     setCurrentDate(new Date(event.date.getFullYear(), event.date.getMonth(), 1));
     setAddingForDate(null);
-    await apiSaveEvent(event).catch(err => console.error('Save failed:', err));
+    await saveEventToServer(event).catch(err => console.error('Save failed:', err));
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -202,8 +212,8 @@ export default function CalendarApp({ onLogout }: Props) {
         <div className="absolute inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center z-40">
           <div className="flex items-center gap-3 text-slate-500">
             <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
             <span className="text-sm font-medium">Loading events…</span>
           </div>
