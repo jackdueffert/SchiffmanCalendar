@@ -4,11 +4,12 @@ services:
     ports:
       - "3001:3001"
     volumes:
-      - ./data:/data          # SQLite database persists here
+      - ./data:/data            # SQLite database persists here
       - ./uploads:/app/uploads  # Temp upload dir
+    env_file:
+      - .env                    # All vars in .env are injected automatically
     environment:
       - PORT=3001
       - DATABASE_PATH=/data/events.db
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5173}
     restart: unless-stopped
