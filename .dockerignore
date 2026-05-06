@@ -1,0 +1,16 @@
+node_modules
+dist
+.git
+uploads
+data
+samples
+scripts
+src
+*.md
+!prompt.md
+index.html
+vite.config.ts
+tailwind.config.js
+postcss.config.js
+tsconfig*.json
+.env*

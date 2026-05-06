@@ -7,25 +7,33 @@ import CalendarGrid from './CalendarGrid';
 import EventModal from './EventModal';
 import AddEventModal from './AddEventModal';
 import FileDropOverlay from './FileDropOverlay';
-import { CalendarEvent, DroppedFile, EventType, EVENT_TYPE_CONFIG, normalizeEventType } from '../types';
+import { CalendarEvent, DroppedFile, EventType, normalizeEventType } from '../types';
 
-const EVENTS_KEY = 'schiffman_cal_events';
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 
-function persistEvents(events: CalendarEvent[]) {
-  localStorage.setItem(EVENTS_KEY, JSON.stringify(events));
+function parseDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
 }
 
-function loadEvents(): CalendarEvent[] {
-  try {
-    const saved = localStorage.getItem(EVENTS_KEY);
-    if (!saved) return [];
-    return (JSON.parse(saved) as Array<CalendarEvent & { date: string }>).map(e => ({
-      ...e,
-      date: new Date(e.date),
-    }));
-  } catch {
-    return [];
-  }
+async function apiSaveEvent(event: CalendarEvent): Promise<void> {
+  await fetch(`${API_URL}/api/events`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: event.id,
+      title: event.title,
+      date: event.date.toISOString().split('T')[0],
+      time: event.time,
+      type: event.type,
+      description: event.description,
+      sourceFile: event.sourceFile,
+    }),
+  });
+}
+
+async function apiDeleteEvent(id: string): Promise<void> {
+  await fetch(`${API_URL}/api/events/${id}`, { method: 'DELETE' });
 }
 
 interface RawEvent {
@@ -41,15 +49,30 @@ interface Props {
 
 export default function CalendarApp({ onLogout }: Props) {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [events, setEvents] = useState<CalendarEvent[]>(loadEvents);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [eventsLoaded, setEventsLoaded] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<DroppedFile[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [addingForDate, setAddingForDate] = useState<Date | null>(null);
 
-  // Persist whenever events change
+  // Load events from server on mount
   useEffect(() => {
-    persistEvents(events);
-  }, [events]);
+    fetch(`${API_URL}/api/events`)
+      .then(r => r.json())
+      .then(({ events: rows }) => {
+        setEvents(
+          rows.map((e: CalendarEvent & { date: string }) => ({
+            ...e,
+            date: parseDate(e.date),
+          })),
+        );
+        setEventsLoaded(true);
+      })
+      .catch(err => {
+        console.error('Could not load events from server:', err);
+        setEventsLoaded(true);
+      });
+  }, []);
 
   const handlePrevMonth = () => setCurrentDate(d => subMonths(d, 1));
   const handleNextMonth = () => setCurrentDate(d => addMonths(d, 1));
@@ -70,12 +93,9 @@ export default function CalendarApp({ onLogout }: Props) {
 
     setDroppedFiles(prev => [...pairs.map(p => p.entry), ...prev]);
 
-    // Analyze all files in parallel
     await Promise.allSettled(
       pairs.map(async ({ file, entry }) => {
-        // Brief pause so the pending state renders before spinner kicks in
         await new Promise(r => setTimeout(r, 250));
-
         setDroppedFiles(prev =>
           prev.map(f => (f.id === entry.id ? { ...f, status: 'processing' } : f)),
         );
@@ -84,11 +104,7 @@ export default function CalendarApp({ onLogout }: Props) {
           const form = new FormData();
           form.append('file', file);
 
-          const res = await fetch('http://localhost:3001/api/analyze', {
-            method: 'POST',
-            body: form,
-          });
-
+          const res = await fetch(`${API_URL}/api/analyze`, { method: 'POST', body: form });
           if (!res.ok) {
             const body = await res.json().catch(() => ({ error: res.statusText }));
             throw new Error(body.error ?? res.statusText);
@@ -101,11 +117,14 @@ export default function CalendarApp({ onLogout }: Props) {
             .map(e => ({
               id: crypto.randomUUID(),
               title: e.title,
-              date: new Date(e.date),
+              date: parseDate(e.date),
               type: normalizeEventType(e.type) as EventType,
               description: e.description,
               sourceFile: entry.name,
             }));
+
+          // Persist each extracted event to the server
+          await Promise.all(extracted.map(apiSaveEvent));
 
           setDroppedFiles(prev =>
             prev.map(f =>
@@ -114,12 +133,7 @@ export default function CalendarApp({ onLogout }: Props) {
           );
 
           if (extracted.length > 0) {
-            setEvents(prev => {
-              const updated = [...prev, ...extracted];
-              persistEvents(updated);
-              return updated;
-            });
-            // Navigate to the month of the earliest extracted event
+            setEvents(prev => [...prev, ...extracted]);
             const earliest = extracted.reduce((a, b) => (a.date < b.date ? a : b));
             setCurrentDate(new Date(earliest.date.getFullYear(), earliest.date.getMonth(), 1));
           }
@@ -133,23 +147,17 @@ export default function CalendarApp({ onLogout }: Props) {
     );
   }, []);
 
-  const handleDeleteEvent = (id: string) => {
-    setEvents(prev => {
-      const updated = prev.filter(e => e.id !== id);
-      persistEvents(updated);
-      return updated;
-    });
+  const handleDeleteEvent = async (id: string) => {
+    setEvents(prev => prev.filter(e => e.id !== id));
     setSelectedEvent(null);
+    await apiDeleteEvent(id).catch(err => console.error('Delete failed:', err));
   };
 
-  const handleSaveNewEvent = (event: CalendarEvent) => {
-    setEvents(prev => {
-      const updated = [...prev, event];
-      persistEvents(updated);
-      return updated;
-    });
+  const handleSaveNewEvent = async (event: CalendarEvent) => {
+    setEvents(prev => [...prev, event]);
     setCurrentDate(new Date(event.date.getFullYear(), event.date.getMonth(), 1));
     setAddingForDate(null);
+    await apiSaveEvent(event).catch(err => console.error('Save failed:', err));
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -189,6 +197,18 @@ export default function CalendarApp({ onLogout }: Props) {
           onCellClick={setAddingForDate}
         />
       </div>
+
+      {!eventsLoaded && (
+        <div className="absolute inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center z-40">
+          <div className="flex items-center gap-3 text-slate-500">
+            <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+            <span className="text-sm font-medium">Loading events…</span>
+          </div>
+        </div>
+      )}
 
       {addingForDate && (
         <AddEventModal
