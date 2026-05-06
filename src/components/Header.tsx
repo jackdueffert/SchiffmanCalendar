@@ -1,14 +1,15 @@
 import { CalendarDays, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
-import { format, addMonths, subMonths } from 'date-fns';
+import { format } from 'date-fns';
 
 interface Props {
   currentDate: Date;
   onPrevMonth: () => void;
   onNextMonth: () => void;
+  onGoToToday: () => void;
   onLogout: () => void;
 }
 
-export default function Header({ currentDate, onPrevMonth, onNextMonth, onLogout }: Props) {
+export default function Header({ currentDate, onPrevMonth, onNextMonth, onGoToToday, onLogout }: Props) {
   return (
     <header className="flex-shrink-0 bg-gradient-to-r from-indigo-700 to-indigo-600 text-white px-6 py-0 flex items-center justify-between shadow-md h-16 z-20">
       {/* Logo */}
@@ -45,7 +46,7 @@ export default function Header({ currentDate, onPrevMonth, onNextMonth, onLogout
       {/* Right: today button + logout */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => {}}
+          onClick={onGoToToday}
           className="text-sm font-medium text-indigo-100 hover:text-white transition-colors hidden sm:block"
         >
           Today

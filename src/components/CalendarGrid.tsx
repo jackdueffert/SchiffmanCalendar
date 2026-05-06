@@ -24,8 +24,11 @@ export default function CalendarGrid({ currentDate, events, onEventClick }: Prop
     events
       .filter(e => isSameDay(e.date, day))
       .sort((a, b) => {
-        const order = { deadline: 0, meeting: 1, task: 2, reminder: 3 };
-        return order[a.type] - order[b.type];
+        const order: Record<string, number> = {
+          expiration: 0, critical: 1, option: 2, rent_increase: 3,
+          deadline: 4, meeting: 5, task: 6, reminder: 7,
+        };
+        return (order[a.type] ?? 9) - (order[b.type] ?? 9);
       });
 
   return (

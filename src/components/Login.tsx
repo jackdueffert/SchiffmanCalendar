@@ -2,7 +2,7 @@ import { useState, FormEvent } from 'react';
 import { CalendarDays, Eye, EyeOff, Lock, User } from 'lucide-react';
 
 interface Props {
-  onLogin: (username: string, password: string) => boolean;
+  onLogin: (username: string, password: string) => Promise<boolean>;
 }
 
 export default function Login({ onLogin }: Props) {
@@ -11,11 +11,14 @@ export default function Login({ onLogin }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isShaking, setIsShaking] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    const success = onLogin(username, password);
+    setIsLoading(true);
+    const success = await onLogin(username, password);
+    setIsLoading(false);
     if (!success) {
       setError('Invalid username or password.');
       setIsShaking(true);
@@ -105,9 +108,10 @@ export default function Login({ onLogin }: Props) {
               {/* Submit */}
               <button
                 type="submit"
-                className="w-full mt-2 py-2.5 px-4 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white text-sm font-semibold rounded-lg shadow-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                disabled={isLoading}
+                className="w-full mt-2 py-2.5 px-4 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg shadow-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
               >
-                Sign In
+                {isLoading ? 'Signing in…' : 'Sign In'}
               </button>
             </form>
           </div>

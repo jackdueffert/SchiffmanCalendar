@@ -1,4 +1,13 @@
-export type EventType = 'deadline' | 'meeting' | 'task' | 'reminder';
+export type EventType =
+  | 'expiration'
+  | 'rent_increase'
+  | 'option'
+  | 'critical'
+  | 'deadline'
+  | 'meeting'
+  | 'task'
+  | 'reminder';
+
 export type FileStatus = 'pending' | 'processing' | 'completed' | 'error';
 
 export interface CalendarEvent {
@@ -8,7 +17,6 @@ export interface CalendarEvent {
   type: EventType;
   description?: string;
   sourceFile?: string;
-  color: string;
 }
 
 export interface DroppedFile {
@@ -21,7 +29,38 @@ export interface DroppedFile {
   extractedEvents?: CalendarEvent[];
 }
 
-export const EVENT_TYPE_CONFIG: Record<EventType, { label: string; bg: string; text: string; light: string; dot: string }> = {
+export const EVENT_TYPE_CONFIG: Record<
+  EventType,
+  { label: string; bg: string; text: string; light: string; dot: string }
+> = {
+  expiration: {
+    label: 'Expiration',
+    bg: 'bg-rose-600',
+    text: 'text-white',
+    light: 'bg-rose-50 text-rose-700 border-rose-200',
+    dot: 'bg-rose-600',
+  },
+  rent_increase: {
+    label: 'Rent Increase',
+    bg: 'bg-orange-500',
+    text: 'text-white',
+    light: 'bg-orange-50 text-orange-700 border-orange-200',
+    dot: 'bg-orange-500',
+  },
+  option: {
+    label: 'Option',
+    bg: 'bg-violet-600',
+    text: 'text-white',
+    light: 'bg-violet-50 text-violet-700 border-violet-200',
+    dot: 'bg-violet-600',
+  },
+  critical: {
+    label: 'Critical',
+    bg: 'bg-red-700',
+    text: 'text-white',
+    light: 'bg-red-50 text-red-800 border-red-300',
+    dot: 'bg-red-700',
+  },
   deadline: {
     label: 'Deadline',
     bg: 'bg-rose-500',
@@ -51,3 +90,10 @@ export const EVENT_TYPE_CONFIG: Record<EventType, { label: string; bg: string; t
     dot: 'bg-amber-400',
   },
 };
+
+const VALID_TYPES = new Set<string>(Object.keys(EVENT_TYPE_CONFIG));
+
+export function normalizeEventType(raw: string): EventType {
+  const normalized = raw.toLowerCase().replace(/[\s-]/g, '_');
+  return VALID_TYPES.has(normalized) ? (normalized as EventType) : 'critical';
+}
