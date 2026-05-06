@@ -14,6 +14,7 @@ export interface CalendarEvent {
   id: string;
   title: string;
   date: Date;
+  time?: string; // HH:MM, only set for manually added events
   type: EventType;
   description?: string;
   sourceFile?: string;

@@ -5,6 +5,7 @@ import Header from './Header';
 import Sidebar from './Sidebar';
 import CalendarGrid from './CalendarGrid';
 import EventModal from './EventModal';
+import AddEventModal from './AddEventModal';
 import FileDropOverlay from './FileDropOverlay';
 import { CalendarEvent, DroppedFile, EventType, EVENT_TYPE_CONFIG, normalizeEventType } from '../types';
 
@@ -43,6 +44,7 @@ export default function CalendarApp({ onLogout }: Props) {
   const [events, setEvents] = useState<CalendarEvent[]>(loadEvents);
   const [droppedFiles, setDroppedFiles] = useState<DroppedFile[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [addingForDate, setAddingForDate] = useState<Date | null>(null);
 
   // Persist whenever events change
   useEffect(() => {
@@ -140,6 +142,16 @@ export default function CalendarApp({ onLogout }: Props) {
     setSelectedEvent(null);
   };
 
+  const handleSaveNewEvent = (event: CalendarEvent) => {
+    setEvents(prev => {
+      const updated = [...prev, event];
+      persistEvents(updated);
+      return updated;
+    });
+    setCurrentDate(new Date(event.date.getFullYear(), event.date.getMonth(), 1));
+    setAddingForDate(null);
+  };
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     noClick: true,
@@ -157,6 +169,7 @@ export default function CalendarApp({ onLogout }: Props) {
         onPrevMonth={handlePrevMonth}
         onNextMonth={handleNextMonth}
         onGoToToday={handleGoToToday}
+        onNavigateTo={setCurrentDate}
         onLogout={onLogout}
       />
 
@@ -173,8 +186,17 @@ export default function CalendarApp({ onLogout }: Props) {
           currentDate={currentDate}
           events={events}
           onEventClick={setSelectedEvent}
+          onCellClick={setAddingForDate}
         />
       </div>
+
+      {addingForDate && (
+        <AddEventModal
+          date={addingForDate}
+          onSave={handleSaveNewEvent}
+          onClose={() => setAddingForDate(null)}
+        />
+      )}
 
       {selectedEvent && (
         <EventModal

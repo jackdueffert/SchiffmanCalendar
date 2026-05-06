@@ -10,11 +10,12 @@ interface Props {
   currentDate: Date;
   events: CalendarEvent[];
   onEventClick: (event: CalendarEvent) => void;
+  onCellClick: (date: Date) => void;
 }
 
 const DAY_HEADERS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-export default function CalendarGrid({ currentDate, events, onEventClick }: Props) {
+export default function CalendarGrid({ currentDate, events, onEventClick, onCellClick }: Props) {
   const monthStart = startOfMonth(currentDate);
   const calStart = startOfWeek(monthStart);
   const calEnd = endOfWeek(endOfMonth(currentDate));
@@ -50,7 +51,10 @@ export default function CalendarGrid({ currentDate, events, onEventClick }: Prop
       </div>
 
       {/* Grid */}
-      <div className="flex-1 grid grid-cols-7 overflow-y-auto" style={{ gridTemplateRows: `repeat(${days.length / 7}, minmax(120px, 1fr))` }}>
+      <div
+        className="flex-1 grid grid-cols-7 overflow-y-auto"
+        style={{ gridTemplateRows: `repeat(${days.length / 7}, minmax(120px, 1fr))` }}
+      >
         {days.map((day, i) => {
           const inCurrentMonth = isSameMonth(day, currentDate);
           const today = isToday(day);
@@ -63,25 +67,29 @@ export default function CalendarGrid({ currentDate, events, onEventClick }: Prop
           return (
             <div
               key={i}
+              onClick={() => onCellClick(day)}
               className={clsx(
-                'p-1.5 border-b border-r border-slate-100 relative transition-colors',
+                'p-1.5 border-b border-r border-slate-100 relative transition-colors cursor-pointer group',
                 inCurrentMonth
                   ? isWeekend ? 'bg-slate-50/40' : 'bg-white'
                   : 'bg-slate-50/70',
-                'hover:bg-indigo-50/20',
+                'hover:bg-indigo-50/30',
                 i % 7 === 0 && 'border-l border-slate-100',
               )}
             >
-              {/* Date number */}
-              <div className="flex items-start justify-between mb-1">
+              {/* Date row: "+" add button (hover) + date number */}
+              <div className="flex items-center justify-between mb-1">
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 flex items-center justify-center text-indigo-400 text-base font-light leading-none select-none">
+                  +
+                </span>
                 <span
                   className={clsx(
                     'inline-flex w-7 h-7 items-center justify-center text-sm rounded-full font-medium transition-colors',
                     today
                       ? 'bg-indigo-600 text-white font-semibold shadow-sm'
                       : inCurrentMonth
-                      ? 'text-slate-700 hover:bg-slate-100'
-                      : 'text-slate-350 text-slate-300',
+                      ? 'text-slate-700'
+                      : 'text-slate-300',
                   )}
                 >
                   {format(day, 'd')}
@@ -94,7 +102,10 @@ export default function CalendarGrid({ currentDate, events, onEventClick }: Prop
                   <EventChip key={event.id} event={event} onClick={() => onEventClick(event)} />
                 ))}
                 {overflow > 0 && (
-                  <button className="w-full text-left text-xs text-slate-400 hover:text-indigo-600 px-1 py-0.5 transition-colors font-medium">
+                  <button
+                    onClick={e => e.stopPropagation()}
+                    className="w-full text-left text-xs text-slate-400 hover:text-indigo-600 px-1 py-0.5 transition-colors font-medium"
+                  >
                     +{overflow} more
                   </button>
                 )}

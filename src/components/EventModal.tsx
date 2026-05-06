@@ -1,6 +1,13 @@
 import { useEffect } from 'react';
 import { format } from 'date-fns';
-import { X, Trash2, Calendar, FileText, Tag } from 'lucide-react';
+import { X, Trash2, Calendar, Clock, FileText, Tag } from 'lucide-react';
+
+function formatTimeDisplay(time: string): string {
+  const [h, m] = time.split(':').map(Number);
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const hour = h % 12 || 12;
+  return m === 0 ? `${hour} ${suffix}` : `${hour}:${m.toString().padStart(2, '0')} ${suffix}`;
+}
 import { CalendarEvent, EVENT_TYPE_CONFIG } from '../types';
 
 interface Props {
@@ -55,7 +62,15 @@ export default function EventModal({ event, onClose, onDelete }: Props) {
               <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center flex-shrink-0">
                 <Calendar className="w-4 h-4 text-slate-500" />
               </div>
-              <span className="font-medium">{format(event.date, 'EEEE, MMMM d, yyyy')}</span>
+              <div>
+                <span className="font-medium">{format(event.date, 'EEEE, MMMM d, yyyy')}</span>
+                {event.time && (
+                  <span className="ml-2 inline-flex items-center gap-1 text-slate-500">
+                    <Clock className="w-3 h-3" />
+                    {formatTimeDisplay(event.time)}
+                  </span>
+                )}
+              </div>
             </div>
 
             {event.description && (
